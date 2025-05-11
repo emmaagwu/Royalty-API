@@ -1,0 +1,2 @@
+2025-05-10T23:46:37.009Z [INFO]: Login successful: userId=1, email=testuser@example.com
+2025-05-10T23:48:23.979Z [WARN]: Login failed: User not found - faketestuser@example.com

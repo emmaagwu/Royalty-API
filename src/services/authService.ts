@@ -2,6 +2,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
+import logger from '../utils/logger';
 
 interface AuthPayload {
   email: string;
@@ -24,38 +25,47 @@ export const signupUser = async ({ email, password }: AuthPayload): Promise<{ st
 };
 
 export const loginUser = async ({ email, password }: AuthPayload): Promise<{ status: number; body: any }> => {
-  const user = await User.findOne({ where: { email } });
-  if (!user) {
-    return { status: 400, body: { message: 'Invalid credentials' } };
-  }
-
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
-    return { status: 400, body: { message: 'Invalid credentials' } };
-  }
- 
-  const options = {
-    expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as string | number
-  } as jwt.SignOptions;
-
-  const token = jwt.sign(
-    { id: user.id, email: user.email },
-    process.env.JWT_SECRET as string,
-    // { expiresIn: JWT_EXPIRES_IN }
-    options
-  );
-
-  const decoded = jwt.decode(token) as { exp: number };
-
-  return {
-    status: 200,
-    body: {
-      message: 'Login successful',
-      data: {
-        token: `Bearer ${token}`,
-        expiresAt: decoded.exp,
-        expiresIn: JWT_EXPIRES_IN
-      }
+  try {
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      logger.warn(`Login failed: User not found - ${email}`);
+      return { status: 400, body: { message: 'Invalid credentials' } };
     }
-  };
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      logger.warn(`Login failed: Incorrect password - ${email}`);
+      return { status: 400, body: { message: 'Invalid credentials' } };
+    }
+
+    const options = {
+      expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as string | number
+    } as jwt.SignOptions;
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET as string,
+      // { expiresIn: JWT_EXPIRES_IN }
+      options
+    );
+
+    const decoded = jwt.decode(token) as { exp: number };
+
+    logger.info(`Login successful: userId=${user.id}, email=${email}`);
+
+    return {
+      status: 200,
+      body: {
+        message: 'Login successful',
+        data: {
+          token: `Bearer ${token}`,
+          expiresAt: decoded.exp,
+          expiresIn: JWT_EXPIRES_IN
+        }
+      }
+    };
+  } catch (error) {
+    logger.error(`Login error for email=${email}`, error);
+    return { status: 500, body: { message: 'Server error' } };
+  }
 };
